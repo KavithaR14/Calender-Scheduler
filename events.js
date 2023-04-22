@@ -1,114 +1,45 @@
-const { response } = require('express'); // recuperar el intellisense
-const Event = require('../models/Event');
+/*
+  Event Routes
+  /api/events
+*/
 
-const getEvents = async (req, res = response) => {
-  // Retornar todos los eventos
-  const events = await Event.find().populate('user', 'name');
-  res.json({
-    ok: true,
-    events,
-  });
-};
+const { Router } = require('express');
+const { check } = require('express-validator');
+const { getEvents, createEvent, updateEvent, deleteEvent } = require('../controllers/events');
+const { isDate } = require('../helpers/isDate');
+const { validateFields } = require('../middlewares/validate-fields');
+const { validateJWT } = require('../middlewares/validate-jwt');
 
-const createEvent = async (req, res = response) => {
-  const event = new Event(req.body);
+const router = Router();
 
-  try {
-    event.user = req.uid;
+// Todas tienes que pasar por la validación del JWT
+router.use(validateJWT);
 
-    const eventDb = await event.save();
-
-    res.json({
-      ok: true,
-      event: eventDb,
-    });
-  } catch (err) {
-    res.status(500).json({
-      ok: false,
-      msg: 'Please be in contact with the administrator',
-    });
-  }
-};
-
-const updateEvent = async (req, res = response) => {
-  const eventId = req.params.id;
-  const uid = req.uid;
-
-  try {
-    const event = await Event.findById(eventId);
-
-    if (!event) {
-      return res.status(404).json({
-        ok: false,
-        msg: 'Event does not exist with that id',
-      });
-    }
-
-    if (event.user.toString() !== uid) {
-      return res.status(401).json({
-        ok: false,
-        msg: 'You do not have the privilege to edit this event',
-      });
-    }
-
-    const newEvent = {
-      ...req.body,
-      user: uid,
-    };
-
-    const updateEvent = await Event.findByIdAndUpdate(eventId, newEvent, { new: true });
-
-    res.json({
-      ok: true,
-      event: updateEvent,
-    });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({
-      ok: false,
-      msg: 'Please be in contact with the administrator',
-    });
-  }
-};
-
-const deleteEvent = async (req, res = response) => {
-  const eventId = req.params.id;
-  const uid = req.uid;
-
-  try {
-    const event = await Event.findById(eventId);
-
-    if (!event) {
-      return res.status(404).json({
-        ok: false,
-        msg: 'Event does not exist with that id',
-      });
-    }
-
-    if (event.user.toString() !== uid) {
-      return res.status(401).json({
-        ok: false,
-        msg: 'You do not have the privilege to delete this event',
-      });
-    }
-
-    await Event.findByIdAndDelete(eventId);
-
-    res.json({
-      ok: true,
-    });
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({
-      ok: false,
-      msg: 'Please be in contact with the administrator',
-    });
-  }
-};
-
-module.exports = {
-  getEvents,
+// Obtener eventos
+router.get('/', getEvents);
+// Crear un nuevo evento
+router.post(
+  '/',
+  [
+    check('title', 'Title is required').not().isEmpty(),
+    check('start', 'Start date is required').custom(isDate),
+    check('end', 'End date is required').custom(isDate),
+    validateFields,
+  ],
   createEvent,
+);
+// Actualizar evento
+router.put(
+  '/:id',
+  [
+    check('title', 'Title is required').not().isEmpty(),
+    check('start', 'Start date is required').custom(isDate),
+    check('end', 'End date is required').custom(isDate),
+    validateFields,
+  ],
   updateEvent,
-  deleteEvent,
-};
+);
+// Borrar evento
+router.delete('/:id', deleteEvent);
+
+module.exports = router;
